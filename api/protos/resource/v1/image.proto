@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package resource.v1;
+
+option go_package = "codeup.aliyun.com/68ce48b215dfc6c8604f8fb0/go-heyin-common/api/gen/go/resource/v1;v1";
+
+// 图片处理类型
+enum ImageProcessType {
+  IMAGE_PROCESS_TYPE_UNSPECIFIED = 0;
+  // 缩略图
+  IMAGE_PROCESS_TYPE_THUMBNAIL = 1;
+  // 裁剪
+  IMAGE_PROCESS_TYPE_CROP = 2;
+  // 水印
+  IMAGE_PROCESS_TYPE_WATERMARK = 3;
+  // 格式转换
+  IMAGE_PROCESS_TYPE_FORMAT = 4;
+  // 质量压缩
+  IMAGE_PROCESS_TYPE_QUALITY = 5;
+}
+
+// 图片格式
+enum ImageFormat {
+  IMAGE_FORMAT_UNSPECIFIED = 0;
+  IMAGE_FORMAT_JPEG = 1;
+  IMAGE_FORMAT_PNG = 2;
+  IMAGE_FORMAT_WEBP = 3;
+  IMAGE_FORMAT_GIF = 4;
+}
+
+// 图片处理规格
+message ImageVariantSpec {
+  // 处理类型
+  ImageProcessType type = 1;
+  // 宽度（0表示不限制）
+  int32 width = 2;
+  // 高度（0表示不限制）
+  int32 height = 3;
+  // 目标格式（0表示不转换）
+  ImageFormat format = 4;
+  // 质量 1-100（0表示默认）
+  int32 quality = 5;
+  // 其他选项（如gravity、text等）
+  map<string, string> options = 6;
+}
+
+// 派生图信息
+message ImageVariant {
+  // 派生图ID
+  string id = 1;
+  // 父文件ID（原图）
+  string parent_file_id = 2;
+  // 云存储对象键
+  string object_key = 3;
+  // 文件名
+  string filename = 4;
+  // 文件大小
+  int64 size = 5;
+  // ETag
+  string etag = 6;
+  // 状态 (init/completed/failed)
+  string status = 7;
+  // 处理规格
+  ImageVariantSpec spec = 8;
+}

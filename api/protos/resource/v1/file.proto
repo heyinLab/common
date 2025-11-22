@@ -1,0 +1,767 @@
+syntax = "proto3";
+
+package resource.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "resource/v1/image.proto";
+
+option go_package = "codeup.aliyun.com/68ce48b215dfc6c8604f8fb0/go-heyin-common/api/gen/go/resource/v1;v1";
+
+// 文件管理
+service FileService {
+  // 初始化文件上传
+  rpc InitiateUpload (InitiateUploadRequest) returns (InitiateUploadResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files:initiate"
+      body: "*"
+    };
+  }
+
+  // 获取上传URL
+  //
+  // GetUploadUrl - 为已创建的文件记录生成新的上传URL（重新上传场景）
+  //
+  // 使用场景：
+  // - 上传失败后重试
+  // - URL过期后重新获取
+  // - 分片上传前获取各分片的上传URL
+  //
+  // 注意：此接口要求文件记录已存在（通过InitiateUpload创建）
+  rpc GetUploadUrl (GetUploadUrlRequest) returns (GetUploadUrlResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files/{file_id}:upload-url"
+      body: "*"
+    };
+  }
+
+  // 完成文件上传
+  //
+  // CompleteUpload - 上传流程的最后一步，用于：
+  // 1. 验证文件是否真正上传到云存储
+  // 2. 更新文件状态为COMPLETED
+  // 3. 记录图片派生处理结果
+  // 4. 触发后续处理（如病毒扫描、内容审核等）
+  //
+  // 调用时机：
+  // - 客户端直传到云存储完成后
+  // - 收到云存储的200 OK响应后
+  //
+  // 注意：
+  // - 必须在上传成功后调用，否则文件状态保持UPLOADING
+  // - 超过24小时未Complete的文件会被自动清理
+  rpc CompleteUpload (CompleteUploadRequest) returns (FileObject) {
+    option (google.api.http) = {
+      post: "/api/v1/files/{file_id}:complete"
+      body: "*"
+    };
+  }
+
+  // 获取文件信息
+  //
+  // GetFile - 查询文件的元数据信息，不包含下载URL
+  //
+  // 返回信息：
+  // - 文件基本信息（文件名、大小、类型）
+  // - 状态信息（上传中/已完成/已删除）
+  // - 存储信息（对象键、存储类别、加密方式）
+  // - 时间信息（创建/更新/过期时间）
+  //
+  // 使用场景：
+  // - 检查文件状态
+  // - 获取文件元数据
+  // - 验证文件是否存在
+  rpc GetFile (GetFileRequest) returns (FileObject) {
+    option (google.api.http) = {
+      get: "/api/v1/files/{file_id}"
+    };
+  }
+
+  // 列出文件
+  // 分页查询指定存储桶中的文件列表
+  //
+  // 支持过滤条件：
+  // - 按状态过滤（status）
+  // - 按对象键前缀过滤（prefix）
+  //
+  // 使用场景：
+  // - 文件管理后台
+  // - 用户文件列表
+  // - 文件浏览器
+  //
+  // 性能建议：
+  // - 建议page_size不超过100
+  // - 使用prefix过滤减少结果集
+  rpc ListFiles (ListFilesRequest) returns (ListFilesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/files"
+    };
+  }
+
+  // 获取下载URL
+  //
+  // GetDownloadUrl - 生成预签名下载URL，用于：
+  // 1. 下载原始文件
+  // 2. 下载图片派生变体
+  // 3. 实时图片处理（可选）
+  //
+  // URL特性：
+  // - 临时授权（默认1小时有效期）
+  // - 无需暴露云存储密钥
+  // - 支持自定义下载文件名
+  // - 客户端可直接访问（CDN加速）
+  //
+  // 使用场景：
+  // - 文件下载
+  // - 图片展示（<img src="...">）
+  // - 视频播放
+  // - PDF预览
+  //
+  // 注意：
+  // - URL会过期，建议缓存时间小于expires_in
+  // - 公开bucket可配置CDN域名，URL永久有效
+  rpc GetDownloadUrl (GetDownloadUrlRequest) returns (GetDownloadUrlResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files/{file_id}:download-url"
+      body: "*"
+    };
+  }
+
+  // 删除文件
+  //
+  // DeleteFile - 支持两种删除模式：
+  // 1. 软删除（permanent=false）：仅标记删除，可恢复
+  // 2. 硬删除（permanent=true）：从云存储永久删除，不可恢复
+  //
+  // 软删除：
+  // - 文件状态变更为DELETED
+  // - 文件仍在云存储中
+  // - 可通过管理接口恢复
+  // - 定期清理（如30天后）
+  //
+  // 硬删除：
+  // - 立即从云存储删除
+  // - 数据库记录标记删除
+  // - 释放存储空间配额
+  // - 不可恢复
+  //
+  // 使用场景：
+  // - 用户删除文件
+  // - 清理临时文件
+  // - 释放存储空间
+  //
+  // 注意：
+  // - 硬删除需要谨慎，建议先软删除观察一段时间
+  // - 删除文件会同时删除所有派生图片
+  rpc DeleteFile (DeleteFileRequest) returns (DeleteFileResponse) {
+    option (google.api.http) = {
+      delete: "/api/v1/files/{file_id}"
+    };
+  }
+
+  // 检查文件是否存在
+  //
+  // CheckFileExists - 通过SHA256校验和检查文件是否已存在（秒传）
+  //
+  // 秒传原理：
+  // 1. 上传前计算文件SHA256
+  // 2. 调用此接口检查
+  // 3. 如果exists=true，直接使用已有文件，无需上传
+  //
+  // 使用场景：
+  // - 大文件上传前检查（节省流量）
+  // - 文件去重
+  // - 网盘类应用的秒传功能
+  //
+  // 返回信息：
+  // - exists: 是否存在
+  // - file: 如果存在，返回文件对象（可直接使用）
+  //
+  // 示例流程：
+  // 1. 用户选择文件
+  // 2. 前端计算SHA256
+  // 3. 调用CheckFileExists
+  // 4. exists=true → 秒传成功，显示"上传完成"
+  // 5. exists=false → 调用InitiateUpload正常上传
+  rpc CheckFileExists (CheckFileExistsRequest) returns (CheckFileExistsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files:check"
+      body: "*"
+    };
+  }
+
+  // 批量获取文件URL - 用于在线展示/播放
+  //
+  // BatchGetFileUrls - 批量获取文件的访问URL
+  //
+  // 适用场景：
+  // - 图片展示：<img src="url">
+  // - 视频播放：<video src="url">
+  // - 音频播放：<audio src="url">
+  // - PDF预览：<embed src="url">
+  //
+  // URL类型：
+  // - 公开文件（PUBLIC_READ bucket）：返回CDN永久URL或公开访问URL
+  // - 私有文件（PRIVATE bucket）：返回预签名URL（有过期时间）
+  //
+  // 性能优势：
+  // - 批量处理：一次请求获取多个文件URL
+  // - 并发生成：内部并发处理提升速度
+  // - 包含变体：可选返回所有派生图片URL
+  //
+  // 返回特性：
+  // - 部分失败不影响其他文件（success字段标识）
+  // - is_public字段标识是否为永久URL
+  // - 公开URL可长期缓存，私有URL需定期刷新
+  rpc BatchGetFileUrls (BatchGetFileUrlsRequest) returns (BatchGetFileUrlsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files:batch-urls"
+      body: "*"
+    };
+  }
+
+  // 批量获取下载URL - 触发浏览器下载
+  //
+  // BatchGetDownloadUrls - 批量获取文件的下载URL
+  //
+  // 适用场景：
+  // - 用户点击"下载"按钮
+  // - 批量导出文件
+  // - 文件另存为操作
+  //
+  // URL特性：
+  // - 总是返回预签名URL（包含Content-Disposition响应头）
+  // - 触发浏览器下载对话框（而不是在浏览器中展示）
+  // - 可自定义下载文件名
+  //
+  // 与BatchGetFileUrls的区别：
+  // - 此接口返回的URL会触发文件下载
+  // - BatchGetFileUrls返回的URL用于在线展示
+  // - 即使是公开文件，此接口也返回预签名URL（为了Content-Disposition头）
+  rpc BatchGetDownloadUrls (BatchGetDownloadUrlsRequest) returns (BatchGetDownloadUrlsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/files:batch-download-urls"
+      body: "*"
+    };
+  }
+}
+
+// FileStatus 文件状态枚举
+//
+// 表示文件在系统中的生命周期状态
+enum FileStatus {
+  // 未指定（默认值，不应使用）
+  FILE_STATUS_UNSPECIFIED = 0;
+
+  // 初始化 - 文件记录已创建等待上传，调用InitiateUpload后的初始状态
+  FILE_STATUS_INIT = 1;
+
+  // 上传中 - 文件正在上传到云存储，获得uploadUrl后上传过程中的状态。注意：超过24小时仍为此状态的文件会被自动清理
+  FILE_STATUS_UPLOADING = 2;
+
+  // 已完成 - 文件上传完成且可用，调用CompleteUpload成功后的状态，此状态的文件可以正常下载使用
+  FILE_STATUS_COMPLETED = 3;
+
+  // 失败 - 上传或处理失败，上传验证失败、病毒扫描失败等。建议：可重新上传或删除
+  FILE_STATUS_FAILED = 4;
+
+  // 已删除 - 文件已被标记删除，软删除状态文件仍在云存储中，可通过管理接口恢复，通常30天后永久删除
+  FILE_STATUS_DELETED = 5;
+
+  // 已归档 - 文件已转为归档存储，长期不访问的文件转为低成本存储。注意：归档文件下载前需要先解冻（可能需要数小时）
+  FILE_STATUS_ARCHIVED = 6;
+}
+
+// StorageClass 存储类别枚举
+//
+// 云存储的存储类型，影响成本和访问性能
+//
+// 成本对比（以COS为例）：
+// - 标准存储：0.024元/GB/月，访问无需解冻
+// - 低频存储：0.018元/GB/月，访问无需解冻
+// - 归档存储：0.005元/GB/月，访问需解冻（数小时）
+enum StorageClass {
+  // 未指定（使用bucket默认配置）
+  STORAGE_CLASS_UNSPECIFIED = 0;
+
+  // 标准存储 - 适合频繁访问的数据。特点：最高性能立即访问，适用场景：用户头像、商品图片、热点内容、最近30天内的文件
+  STORAGE_CLASS_STANDARD = 1;
+
+  // 低频访问（Infrequent Access）。特点：成本降低25%仍可立即访问，适用场景：30-90天的文件、备份文件、日志归档。注意：有最小存储时间要求（通常30天）
+  STORAGE_CLASS_IA = 2;
+
+  // 归档存储 - 长期保存极少访问。特点：成本最低（降低80%）访问需解冻，适用场景：90天以上的文件、合规存档（如财务数据需保存7年）、历史数据冷备份。注意：解冻需要1-5小时有解冻费用
+  STORAGE_CLASS_ARCHIVE = 3;
+}
+
+// EncryptionType 加密类型枚举
+//
+// 云存储的服务端加密方式，保护数据安全
+enum EncryptionType {
+  // 不加密（不推荐用于敏感数据），适用：公开文件（如用户头像、商品图）
+  ENCRYPTION_TYPE_NONE = 0;
+
+  // S3托管密钥加密（SSE-S3），云厂商管理加密密钥。特点：零配置自动加密/解密、无额外成本、适合大部分场景，适用：一般业务数据
+  ENCRYPTION_TYPE_SSE_S3 = 1;
+
+  // KMS密钥加密（SSE-KMS），使用密钥管理服务（KMS）的密钥。特点：可审计（记录谁访问了哪些文件）、细粒度权限控制、额外成本（KMS API调用费），适用：金融、医疗等高合规要求场景
+  ENCRYPTION_TYPE_SSE_KMS = 2;
+
+  // 客户提供密钥加密（SSE-C），客户自己管理加密密钥。特点：最高安全性云厂商无法解密、客户需妥善保管密钥、丢失密钥将永久无法访问数据，适用：极高安全要求场景（如政府、军事）
+  ENCRYPTION_TYPE_SSE_C = 3;
+}
+
+// FileObject 文件对象（核心消息）
+//
+// 表示系统中的一个文件，包含完整的元数据信息。
+//
+// 存储架构：
+// - 元数据：存储在PostgreSQL数据库
+// - 文件内容：存储在云存储（COS/OSS/S3/OBS）
+// - 关联字段：object_key 是连接两者的桥梁
+//
+// 使用示例：
+// - 查询文件信息：GetFile
+// - 生成下载URL：GetDownloadUrl
+// - 检查上传状态：status字段
+message FileObject {
+  // 文件唯一标识符（ULID格式，26个字符），示例："01JCABCDEFGHIJKLMNOPQRSTUV"。特点：按时间排序（包含时间戳）、全局唯一、URL安全（大小写字母+数字）
+  string id = 1;
+
+  // 租户ID（多租户隔离），同一个系统可服务多个租户，不同租户的数据完全隔离。示例："tenant-001"、"company-abc"
+  uint32 tenant_id = 2;
+
+  // 所属存储桶ID，文件必须属于某个存储桶，用于按业务模块组织文件。示例："user-avatars"、"product-images"
+  string bucket_id = 3;
+
+  // 云存储对象键（实际存储路径），格式：{tenant_id}/{bucket_id}/{year}/{month}/{day}/{file_id}.{ext}，示例："tenant-001/user-avatars/2025/11/10/01JCFILE123.jpg"。重要：此字段是元数据与云存储的关联键
+  string object_key = 4;
+
+  // 原始文件名（用户上传时的文件名），示例："我的照片.jpg"、"report.pdf"，用于下载时显示给用户和文件列表展示。注意：可能包含非ASCII字符
+  string filename = 5;
+
+  // 文件分组ID（可选），用于对文件进行分组管理，便于按业务逻辑组织文件。示例："product-images"、"user-docs"
+  string group_id = 20;
+
+  // 文件大类（自动识别），根据文件扩展名自动分类。可选值："image"（图片jpg/png/gif等）、"video"（视频mp4/avi/mov等）、"document"（文档pdf/doc/xls等）、"audio"（音频mp3/wav等）、"archive"（压缩包zip/rar等）、"other"（其他类型）。用于前端文件分类展示和统计分析
+  string file_category = 21;
+
+  // 文件大小（字节），示例：2048576表示2MB，用于配额检查、前端显示文件大小、选择上传方式（小文件vs分片上传）
+  int64 size = 6;
+
+  // MIME类型，示例："image/jpeg"（JPEG图片）、"image/png"（PNG图片）、"application/pdf"（PDF文档）、"video/mp4"（MP4视频），用于浏览器正确显示文件
+  string content_type = 7;
+
+  // SHA256校验和（64个16进制字符），用于文件去重（秒传）、完整性验证、防篡改。前端上传前计算（避免重复上传），示例："e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  string checksum_sha256 = 8;
+
+  // ETag（来自云存储），云存储返回的文件标识，用于缓存控制（HTTP ETag）和分片上传合并验证。示例："\"5eb63bbbe01eeed093cb22bb8f5acdc3\""
+  string etag = 9;
+
+  // 文件当前状态，见FileStatus枚举详细说明。常用值：UPLOADING（上传中）、COMPLETED（可用）、DELETED（已删除）
+  FileStatus status = 10;
+
+  // 存储类别，影响成本和访问性能。常用值：STANDARD（标准存储推荐）、IA（低频访问30天后）、ARCHIVE（归档存储长期保存）
+  StorageClass storage_class = 11;
+
+  // 加密方式，服务端加密配置，推荐：SSE_S3（零配置无额外成本）
+  EncryptionType encryption = 12;
+
+  // 自定义元数据（键值对），用于业务相关信息、图片派生变体映射、扩展字段。示例：{"variant_small": "01JCVAR1...", "variant_medium": "01JCVAR2...", "author": "张三", "category": "产品图"}，限制：总大小不超过2KB
+  map<string, string> metadata = 13;
+
+  // 上传者标识，记录谁上传了这个文件，用于审计和权限控制。示例："user-123"、"api-key-abc"
+  string uploader_id = 14;
+
+  // 上传来源IP地址，示例："192.168.1.100"、"203.0.113.42"，用于安全审计和异常检测
+  string source_ip = 15;
+
+  // 版本号（乐观锁），每次更新自动+1，用于防止并发更新冲突。示例：更新时检查version是否匹配
+  int32 version = 16;
+
+  // 过期时间（可选），临时文件的过期时间，用于临时分享链接、验证码图片、临时上传，过期后自动清理
+  google.protobuf.Timestamp expired_at = 17;
+
+  // 创建时间，文件记录创建时间。注意：不是文件的实际上传时间
+  google.protobuf.Timestamp created_at = 18;
+
+  // 最后更新时间，任何字段变更都会更新，用于跟踪文件变更历史
+  google.protobuf.Timestamp updated_at = 19;
+}
+
+// InitiateUploadRequest 初始化上传请求
+//
+// 用于创建文件记录并获取上传URL
+//
+// 注意：
+//   - tenant_id 从认证令牌（Token）中自动提取
+//   - bucket_id 根据租户的区域（region）自动选择
+message InitiateUploadRequest {
+  // ========== 基础文件信息（必填） ==========
+
+  // 文件名，支持中文和特殊字符。示例："icon.png"、"avatar.jpg"
+  string filename = 3;
+
+  // 文件大小（字节），用于配额检查和策略验证。建议小文件(<100MB)用此接口，大文件用分片上传
+  int64 size = 4;
+
+  // MIME类型，影响浏览器显示和策略验证。示例："image/jpeg"、"video/mp4"
+  string content_type = 5;
+
+  // SHA256校验和（推荐），用于文件去重（秒传）和完整性验证。前端使用crypto.subtle.digest计算，提供此值可实现秒传功能
+  string checksum_sha256 = 6;
+
+  // ========== 策略参数（推荐） ==========
+
+  // 服务名称（强烈推荐），用于自动应用上传策略（验证规则+图片处理）。示例："pwa"、"product"、"user"，需与module_name配合使用
+  string service_name = 13;
+
+  // 模块名称（强烈推荐），用于自动应用上传策略。示例："icon"、"avatar"、"cover"，需与service_name配合使用
+  string module_name = 14;
+
+  // ========== 图片验证信息（仅图片类型需要） ==========
+
+  // 图片宽度（像素），用于策略验证（尺寸、宽高比检查），仅当content_type为图片时需要提供
+  int32 width = 15;
+
+  // 图片高度（像素），用于策略验证（尺寸、宽高比检查），仅当content_type为图片时需要提供
+  int32 height = 16;
+
+  // ========== 高级选项（可选） ==========
+
+  // 存储类别，默认：STANDARD（标准存储）
+  StorageClass storage_class = 7;
+
+  // 加密方式，默认：NONE或bucket配置
+  EncryptionType encryption = 8;
+
+  // 自定义元数据，限制：总大小<2KB
+  map<string, string> metadata = 9;
+
+  // 上传者ID，用于审计和权限控制
+  string uploader_id = 10;
+
+  // 过期时间（秒），用于临时文件自动清理。示例：3600表示1小时后过期
+  int64 expired_seconds = 11;
+}
+
+// InitiateUploadResponse 初始化上传响应
+//
+// 返回上传所需的信息和文件对象
+message InitiateUploadResponse {
+  // 是否秒传成功。true：文件已存在无需上传，false：需要上传。原理：通过checksum_sha256检测文件已存在，优势：节省流量瞬间完成
+  bool instant_upload = 1;
+
+  // 文件对象（元数据），无论是否秒传都会返回。instant_upload=true时可直接使用，false时上传完成后调用Complete更新
+  FileObject file = 2;
+
+  // 预签名上传URL（instant_upload=false时使用），客户端直接PUT上传到此URL（方法：PUT不是POST，请求头：Content-Type需与文件类型匹配）。注意：此URL绕过业务服务器，直传云存储
+  string upload_url = 3;
+
+  // 上传URL有效期（秒），默认：3600（1小时）。超过此时间需重新获取URL，建议立即上传避免过期
+  int64 upload_expires_in = 4;
+
+  // 预期生成的图片派生变体，包含每个变体的规格和ID。前端可预知将生成哪些尺寸，状态初始为PENDING处理完成后变为READY。注意：仅当请求中包含image_variants时返回
+  repeated ImageVariant expected_variants = 5;
+
+  // 图片处理模式。可能值："sync"（同步处理COS等支持上传完成即可用）、"async"（异步处理OSS等需等待处理队列）、"manual"（手动处理不支持自动处理需手动调用）、"none"（无处理未请求图片处理或非图片文件）。用途：前端根据此值决定如何获取派生图片
+  string processing_mode = 6;
+}
+
+// GetUploadUrlRequest 获取上传URL请求
+//
+// 用于重新获取已创建文件的上传URL（重试场景）
+//
+// 注意：tenant_id 从认证令牌中自动提取
+message GetUploadUrlRequest {
+  // 文件ID（必填），通过InitiateUpload获得的文件ID
+  string file_id = 3;
+
+  // URL有效期（秒，可选），默认：3600（1小时），范围：60~604800（1分钟~7天）
+  int64 expires_in = 4;
+}
+
+// GetUploadUrlResponse 获取上传URL响应
+message GetUploadUrlResponse {
+  // 预签名上传URL，用法：PUT {upload_url}，注意：URL包含签名参数，直接使用即可
+  string upload_url = 1;
+
+  // URL有效期（秒），URL在此时间后失效
+  int64 expires_in = 2;
+
+  // 文件ID（确认），用途：验证响应对应的文件
+  string file_id = 3;
+}
+
+// CompleteUploadRequest 完成上传请求
+//
+// 通知服务器文件已上传到云存储
+//
+// 注意：tenant_id 从认证令牌中自动提取
+message CompleteUploadRequest {
+  // 文件ID（必填）
+  string file_id = 3;
+
+  // ETag（可选但推荐），云存储返回的ETag值，用于验证文件完整性。获取：从PUT响应的ETag头获取，格式："\"5eb63bbbe01eeed093cb22bb8f5acdc3\""
+  string etag = 4;
+
+  // 图片派生处理结果（可选），仅图片处理场景使用，用于记录每个派生图片的处理状态。注意：同步处理模式(COS)通常无需手动提供
+  repeated VariantResult variant_results = 5;
+}
+
+// VariantResult 图片派生结果
+//
+// 记录单个派生图片的处理结果
+message VariantResult {
+  // 派生图片ID，对应InitiateUploadResponse中的variant.id
+  string variant_id = 1;
+
+  // ETag（来自云存储），派生图片的ETag值，用于验证派生图片完整性
+  string etag = 2;
+
+  // 实际文件大小（字节），派生图片的实际大小，用于统计存储使用量
+  int64 size = 3;
+
+  // 处理是否成功。true：派生图片生成成功，false：处理失败见error字段
+  bool success = 4;
+
+  // 错误信息（success=false时），示例："unsupported format"、"processing timeout"，用于排查处理失败原因
+  string error = 5;
+}
+
+// GetFileRequest 获取文件请求
+//
+// 注意：tenant_id 从认证令牌中自动提取
+message GetFileRequest {
+  // 文件ID（必填）
+  string file_id = 3;
+}
+
+// ListFilesRequest 列出文件请求
+//
+// 分页查询当前租户的文件列表
+//
+// 注意：
+//   - tenant_id 从认证令牌中自动提取
+//   - 返回当前租户在其对应区域存储桶中的所有文件
+message ListFilesRequest {
+  // 页码（可选），默认：1（第一页），最小：1
+  int32 page = 3;
+
+  // 每页数量（可选），默认：20，范围：1~100，建议不超过100避免性能问题
+  int32 page_size = 4;
+
+  // 按状态过滤（可选），示例：FILE_STATUS_COMPLETED（只查询已完成的文件），默认：查询所有状态
+  FileStatus status = 5;
+
+  // 按对象键前缀过滤（可选），用于按路径筛选文件。示例："2025/11/"查询11月的文件，使用prefix可显著提升查询速度
+  string prefix = 6;
+}
+
+// ListFilesResponse 列出文件响应
+message ListFilesResponse {
+  // 文件列表，当前页的文件对象数组
+  repeated FileObject files = 1;
+
+  // 总记录数，用于计算总页数。公式：total_pages = ceil(total / page_size)
+  int32 total = 2;
+
+  // 当前页码，确认返回的页码
+  int32 page = 3;
+
+  // 每页数量，确认每页大小
+  int32 page_size = 4;
+}
+
+// GetDownloadUrlRequest 获取下载URL请求
+//
+// 生成文件或派生图片的下载URL
+//
+// 注意：tenant_id 从认证令牌中自动提取
+message GetDownloadUrlRequest {
+  // 文件ID（必填）
+  string file_id = 3;
+
+  // URL有效期（秒，可选），默认：3600（1小时），范围：60~604800（1分钟~7天）。建议根据使用场景选择：即时下载3600（1小时）、分享链接86400（24小时）、临时预览600（10分钟）
+  int64 expires_in = 4;
+
+  // 自定义下载文件名（可选），用户下载时显示的文件名，用于覆盖原始filename字段。示例："2025年度报告.pdf"，支持中文文件名
+  string download_filename = 5;
+
+  // 请求特定派生图片（可选），获取指定派生图片的URL。示例："01JCVAR1..."（小图ID），用于下载特定尺寸的图片，注意：与variant_spec互斥
+  string variant_id = 6;
+
+  // 实时处理规格（可选），请求实时处理的图片，按需生成特定规格的图片。性能：首次访问需要处理时间（1-3秒），注意：仅支持实时处理的云存储（如COS），建议优先使用预生成的variant_id
+  ImageVariantSpec variant_spec = 7;
+}
+
+// GetDownloadUrlResponse 获取下载URL响应
+message GetDownloadUrlResponse {
+  // 下载URL，预签名下载URL，用法：GET {download_url}。特点：无需认证（URL包含签名）、可直接在<img>/<video>等标签中使用、支持CDN加速。注意：URL会过期，建议缓存时间<expires_in
+  string download_url = 1;
+
+  // URL有效期（秒），URL在此时间后失效
+  int64 expires_in = 2;
+
+  // 文件名，下载时显示的文件名，来源：download_filename或原始filename
+  string filename = 3;
+
+  // 文件大小（字节），用于显示文件大小和进度条
+  int64 size = 4;
+
+  // MIME类型，用于浏览器正确处理文件
+  string content_type = 5;
+
+  // 所有派生图片URL（可选），图片文件时返回所有可用派生图片。格式：variant_id -> download_url，用于一次获取所有尺寸的URL，避免多次调用此接口
+  map<string, string> variant_urls = 6;
+}
+
+// DeleteFileRequest 删除文件请求
+//
+// 注意：tenant_id 从认证令牌中自动提取
+message DeleteFileRequest {
+  // 文件ID（必填）
+  string file_id = 3;
+
+  // 是否永久删除（可选）。false：软删除（默认）状态变为DELETED文件仍在云存储可恢复定期清理（30天）；true：硬删除立即从云存储删除不可恢复释放存储配额包括所有派生图片。建议：生产环境使用软删除避免误删
+  bool permanent = 4;
+}
+
+// DeleteFileResponse 删除文件响应
+message DeleteFileResponse {
+  // 是否删除成功。true：删除成功，false：删除失败（文件不存在或权限不足）
+  bool success = 1;
+}
+
+// CheckFileExistsRequest 检查文件存在请求
+//
+// 用于秒传功能，检查文件是否已存在
+//
+// 注意：tenant_id 从认证令牌中自动提取
+message CheckFileExistsRequest {
+  // SHA256校验和（必填），用于匹配文件。计算：前端对文件计算SHA256，用途：查找相同内容的文件
+  string checksum_sha256 = 3;
+
+  // 文件大小（字节，可选但推荐），额外的匹配条件，用于避免SHA256碰撞（理论上）和提高查询性能（数据库索引）
+  int64 size = 4;
+}
+
+// CheckFileExistsResponse 检查文件存在响应
+message CheckFileExistsResponse {
+  // 文件是否存在。true：找到相同文件可秒传，false：文件不存在需正常上传
+  bool exists = 1;
+
+  // 已存在的文件对象（exists=true时），可直接使用此文件。用途：复用文件ID、显示文件信息、关联到业务数据。示例流程：CheckFileExists返回exists=true→使用file.id关联到用户头像→无需上传秒传完成
+  FileObject file = 2;
+}
+
+// BatchGetFileUrlsRequest 批量获取文件URL请求
+//
+// 用于批量获取文件的访问URL（在线展示/播放）
+message BatchGetFileUrlsRequest {
+  // 文件ID列表（必填），要获取URL的文件ID数组，限制：建议单次不超过100个。示例：["01JC111", "01JC222", "01JC333"]
+  repeated string file_ids = 1;
+
+  // 是否包含变体URL（可选，默认true）。true：返回原图+所有派生图URL，false：只返回原图URL，用于节省响应大小（如果不需要变体）
+  bool include_variants = 2;
+
+  // URL有效期（秒，可选），默认：3600（1小时），仅对私有文件有效公开文件忽略此参数，范围：60~604800（1分钟~7天）
+  int64 expires_in = 3;
+}
+
+// BatchGetFileUrlsResponse 批量获取文件URL响应
+message BatchGetFileUrlsResponse {
+  // file_id -> URL信息映射，每个文件的URL信息。注意：即使某个文件失败，其他文件仍正常返回
+  map<string, FileUrlInfo> results = 1;
+
+  // URL有效期（秒），私有文件的URL过期时间，公开文件忽略此值（永久有效）
+  int64 expires_in = 2;
+}
+
+// FileUrlInfo 文件URL信息
+//
+// 包含文件的访问URL及相关信息
+message FileUrlInfo {
+  // 文件访问URL。公开文件：CDN永久URL或公开访问URL，私有文件：预签名URL（临时有效），用途：直接用于<img>/<video>/<audio>/<embed>标签
+  string url = 1;
+
+  // 派生图URL（variant_id -> url），所有派生图片的URL。示例：{"thumbnail_200x200": "https://...", "medium_800x800": "https://..."}，注意：仅在include_variants=true时返回
+  map<string, string> variant_urls = 2;
+
+  // 是否为公开URL。true：永久有效可长期缓存（公开bucket或CDN），false：临时有效需定期刷新（私有bucket），用于前端据此决定缓存策略
+  bool is_public = 3;
+
+  // URL过期时间（秒）。is_public=true：值为0（永久有效），is_public=false：预签名URL的剩余有效期，建议前端在过期前30分钟刷新URL
+  int64 expires_in = 4;
+
+  // 文件名，用于展示文件信息
+  string filename = 5;
+
+  // 文件大小（字节）
+  int64 size = 6;
+
+  // MIME类型，示例："image/jpeg"、"video/mp4"、"application/pdf"
+  string content_type = 7;
+
+  // 是否成功获取URL。true：成功url字段有效，false：失败查看error字段
+  bool success = 8;
+
+  // 错误信息（success=false时），示例："file not found"、"bucket disabled"
+  string error = 9;
+}
+
+// BatchGetDownloadUrlsRequest 批量获取下载URL请求
+//
+// 用于批量获取文件的下载URL（触发下载）
+message BatchGetDownloadUrlsRequest {
+  // 文件下载请求列表（必填），每个文件的下载配置，限制：建议单次不超过50个
+  repeated FileDownloadRequest files = 1;
+
+  // URL有效期（秒，可选），默认：3600（1小时），范围：60~604800（1分钟~7天），所有下载URL的统一有效期
+  int64 expires_in = 2;
+}
+
+// FileDownloadRequest 单个文件下载请求
+message FileDownloadRequest {
+  // 文件ID（必填）
+  string file_id = 1;
+
+  // 自定义下载文件名（可选），用户下载时显示的文件名，用于提供友好的下载文件名。示例："产品图片_2025.jpg"、"用户手册.pdf"，默认：使用原始文件名
+  string download_filename = 2;
+
+  // 要下载的变体ID（可选），下载指定的派生图片。示例："thumbnail_200x200"，默认：下载原图
+  string variant_id = 3;
+}
+
+// BatchGetDownloadUrlsResponse 批量获取下载URL响应
+message BatchGetDownloadUrlsResponse {
+  // file_id -> 下载信息映射，每个文件的下载URL信息
+  map<string, FileDownloadInfo> results = 1;
+
+  // URL有效期（秒）
+  int64 expires_in = 2;
+}
+
+// FileDownloadInfo 文件下载信息
+message FileDownloadInfo {
+  // 下载URL（预签名URL），包含Content-Disposition响应头，访问此URL会触发浏览器下载，用于用户点击下载按钮时使用
+  string download_url = 1;
+
+  // 下载文件名，下载时显示的文件名
+  string filename = 2;
+
+  // 文件大小（字节）
+  int64 size = 3;
+
+  // MIME类型
+  string content_type = 4;
+
+  // URL过期时间（秒），URL在此时间后失效
+  int64 expires_in = 5;
+
+  // 是否成功生成下载URL。true：成功download_url有效，false：失败查看error字段
+  bool success = 6;
+
+  // 错误信息（success=false时），示例："file not found"、"variant not found"
+  string error = 7;
+}
