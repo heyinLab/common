@@ -4,7 +4,6 @@ import "context"
 
 type Claims struct {
 	UserID     uint32
-	UserType   string
 	TenantID   uint32
 	RegionName string
 }
