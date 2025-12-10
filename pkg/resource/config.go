@@ -7,7 +7,7 @@ import (
 
 const (
 	// DefaultServiceName 默认的资源服务名称（用于服务发现）
-	DefaultServiceName = "resource-service"
+	DefaultServiceName = "resourceServer"
 
 	// DefaultTimeout 默认超时时间
 	DefaultTimeout = 10 * time.Second
@@ -20,7 +20,7 @@ const (
 type InternalConfig struct {
 	// Endpoint 服务端点
 	// 直连方式: "localhost:9000" 或 "192.168.1.100:9000"
-	// 服务发现方式: "discovery:///resource-service"
+	// 服务发现方式: "discovery:///resourceServer"
 	Endpoint string
 
 	// ServiceName 服务名称（用于服务发现）
