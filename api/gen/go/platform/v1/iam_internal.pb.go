@@ -424,7 +424,7 @@ type TenantPermissionTreeNode struct {
 	Component     *string                     `protobuf:"bytes,9,opt,name=component,proto3,oneof" json:"component,omitempty"`
 	Status        string                      `protobuf:"bytes,10,opt,name=status,proto3" json:"status,omitempty"`
 	Meta          *RouteMeta                  `protobuf:"bytes,11,opt,name=meta,proto3,oneof" json:"meta,omitempty"`
-	ProductId     *uint32                     `protobuf:"varint,12,opt,name=product_id,json=productId,proto3,oneof" json:"product_id,omitempty"`
+	ProductCode   *string                     `protobuf:"bytes,12,opt,name=product_code,json=productCode,proto3,oneof" json:"product_code,omitempty"`
 	SortOrder     int32                       `protobuf:"varint,13,opt,name=sort_order,json=sortOrder,proto3" json:"sort_order,omitempty"`
 	Children      []*TenantPermissionTreeNode `protobuf:"bytes,14,rep,name=children,proto3" json:"children,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -538,11 +538,11 @@ func (x *TenantPermissionTreeNode) GetMeta() *RouteMeta {
 	return nil
 }
 
-func (x *TenantPermissionTreeNode) GetProductId() uint32 {
-	if x != nil && x.ProductId != nil {
-		return *x.ProductId
+func (x *TenantPermissionTreeNode) GetProductCode() string {
+	if x != nil && x.ProductCode != nil {
+		return *x.ProductCode
 	}
-	return 0
+	return ""
 }
 
 func (x *TenantPermissionTreeNode) GetSortOrder() int32 {
@@ -660,8 +660,8 @@ func (x *GetTenantPermissionsTreeResponse) GetTotal() uint32 {
 // ==================== 内部 IAM 服务 ====================
 // 根据产品ID获取权限codes请求
 type GetPermissionCodesByProductRequest struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	ProductId uint32                 `protobuf:"varint,1,opt,name=product_id,json=productId,proto3" json:"product_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	ProductCode string                 `protobuf:"bytes,1,opt,name=product_code,json=productId,proto3" json:"product_code,omitempty"`
 	// 可选：只获取指定状态的权限 (DEV, BETA, GA)
 	Status        *string `protobuf:"bytes,2,opt,name=status,proto3,oneof" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -698,11 +698,11 @@ func (*GetPermissionCodesByProductRequest) Descriptor() ([]byte, []int) {
 	return file_platform_v1_iam_internal_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *GetPermissionCodesByProductRequest) GetProductId() uint32 {
+func (x *GetPermissionCodesByProductRequest) GetProductCode() string {
 	if x != nil {
-		return x.ProductId
+		return x.ProductCode
 	}
-	return 0
+	return ""
 }
 
 func (x *GetPermissionCodesByProductRequest) GetStatus() string {
@@ -868,7 +868,7 @@ const file_platform_v1_iam_internal_proto_rawDesc = "" +
 	"_componentB\a\n" +
 	"\x05_metaB\x0e\n" +
 	"\f_create_timeB\x0e\n" +
-	"\f_update_time\"\xde\x04\n" +
+	"\f_update_time\"\xe4\x04\n" +
 	"\x18TenantPermissionTreeNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -882,9 +882,8 @@ const file_platform_v1_iam_internal_proto_rawDesc = "" +
 	"\tcomponent\x18\t \x01(\tH\x06R\tcomponent\x88\x01\x01\x12\x16\n" +
 	"\x06status\x18\n" +
 	" \x01(\tR\x06status\x126\n" +
-	"\x04meta\x18\v \x01(\v2\x1d.common.platform.v1.RouteMetaH\aR\x04meta\x88\x01\x01\x12\"\n" +
-	"\n" +
-	"product_id\x18\f \x01(\rH\bR\tproductId\x88\x01\x01\x12\x1d\n" +
+	"\x04meta\x18\v \x01(\v2\x1d.common.platform.v1.RouteMetaH\aR\x04meta\x88\x01\x01\x12&\n" +
+	"\fproduct_code\x18\f \x01(\tH\bR\vproductCode\x88\x01\x01\x12\x1d\n" +
 	"\n" +
 	"sort_order\x18\r \x01(\x05R\tsortOrder\x12H\n" +
 	"\bchildren\x18\x0e \x03(\v2,.common.platform.v1.TenantPermissionTreeNodeR\bchildrenB\a\n" +
@@ -897,17 +896,16 @@ const file_platform_v1_iam_internal_proto_rawDesc = "" +
 	"\t_redirectB\f\n" +
 	"\n" +
 	"_componentB\a\n" +
-	"\x05_metaB\r\n" +
-	"\v_product_id\"I\n" +
+	"\x05_metaB\x0f\n" +
+	"\r_product_code\"I\n" +
 	"\x1fGetTenantPermissionsTreeRequest\x12\x1b\n" +
 	"\x06status\x18\x01 \x01(\tH\x00R\x06status\x88\x01\x01B\t\n" +
 	"\a_status\"z\n" +
 	" GetTenantPermissionsTreeResponse\x12@\n" +
 	"\x04tree\x18\x01 \x03(\v2,.common.platform.v1.TenantPermissionTreeNodeR\x04tree\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\rR\x05total\"p\n" +
-	"\"GetPermissionCodesByProductRequest\x12\"\n" +
-	"\n" +
-	"product_id\x18\x01 \x01(\rB\x03\xe0A\x02R\tproductId\x12\x1b\n" +
+	"\x05total\x18\x02 \x01(\rR\x05total\"r\n" +
+	"\"GetPermissionCodesByProductRequest\x12$\n" +
+	"\fproduct_code\x18\x01 \x01(\tB\x03\xe0A\x02R\tproductId\x12\x1b\n" +
 	"\x06status\x18\x02 \x01(\tH\x00R\x06status\x88\x01\x01B\t\n" +
 	"\a_status\"Q\n" +
 	"#GetPermissionCodesByProductResponse\x12\x14\n" +
