@@ -660,8 +660,8 @@ func (x *GetTenantPermissionsTreeResponse) GetTotal() uint32 {
 // ==================== 内部 IAM 服务 ====================
 // 根据产品ID获取权限codes请求
 type GetPermissionCodesByProductRequest struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	ProductId uint32                 `protobuf:"varint,1,opt,name=product_id,json=productId,proto3" json:"product_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	ProductCode string                 `protobuf:"bytes,1,opt,name=product_code,json=productId,proto3" json:"product_code,omitempty"`
 	// 可选：只获取指定状态的权限 (DEV, BETA, GA)
 	Status        *string `protobuf:"bytes,2,opt,name=status,proto3,oneof" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -698,11 +698,11 @@ func (*GetPermissionCodesByProductRequest) Descriptor() ([]byte, []int) {
 	return file_platform_v1_iam_internal_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *GetPermissionCodesByProductRequest) GetProductId() uint32 {
+func (x *GetPermissionCodesByProductRequest) GetProductCode() string {
 	if x != nil {
-		return x.ProductId
+		return x.ProductCode
 	}
-	return 0
+	return ""
 }
 
 func (x *GetPermissionCodesByProductRequest) GetStatus() string {
@@ -904,10 +904,9 @@ const file_platform_v1_iam_internal_proto_rawDesc = "" +
 	"\a_status\"z\n" +
 	" GetTenantPermissionsTreeResponse\x12@\n" +
 	"\x04tree\x18\x01 \x03(\v2,.common.platform.v1.TenantPermissionTreeNodeR\x04tree\x12\x14\n" +
-	"\x05total\x18\x02 \x01(\rR\x05total\"p\n" +
-	"\"GetPermissionCodesByProductRequest\x12\"\n" +
-	"\n" +
-	"product_id\x18\x01 \x01(\rB\x03\xe0A\x02R\tproductId\x12\x1b\n" +
+	"\x05total\x18\x02 \x01(\rR\x05total\"r\n" +
+	"\"GetPermissionCodesByProductRequest\x12$\n" +
+	"\fproduct_code\x18\x01 \x01(\tB\x03\xe0A\x02R\tproductId\x12\x1b\n" +
 	"\x06status\x18\x02 \x01(\tH\x00R\x06status\x88\x01\x01B\t\n" +
 	"\a_status\"Q\n" +
 	"#GetPermissionCodesByProductResponse\x12\x14\n" +

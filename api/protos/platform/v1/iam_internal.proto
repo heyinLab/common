@@ -92,7 +92,7 @@ message GetTenantPermissionsTreeResponse {
 // ==================== 内部 IAM 服务 ====================
 // 根据产品ID获取权限codes请求
 message GetPermissionCodesByProductRequest {
-  uint32 product_id = 1 [json_name = "productId", (google.api.field_behavior) = REQUIRED];
+  string product_code = 1 [json_name = "productId", (google.api.field_behavior) = REQUIRED];
   // 可选：只获取指定状态的权限 (DEV, BETA, GA)
   optional string status = 2 [json_name = "status"];
 }

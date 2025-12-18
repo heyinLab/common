@@ -982,7 +982,7 @@ func (m *GetPermissionCodesByProductRequest) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for ProductId
+	// no validation rules for ProductCode
 
 	if m.Status != nil {
 		// no validation rules for Status
