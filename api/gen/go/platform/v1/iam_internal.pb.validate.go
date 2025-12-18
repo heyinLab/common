@@ -627,8 +627,8 @@ func (m *TenantPermissionTreeNode) validate(all bool) error {
 
 	}
 
-	if m.ProductId != nil {
-		// no validation rules for ProductId
+	if m.ProductCode != nil {
+		// no validation rules for ProductCode
 	}
 
 	if len(errors) > 0 {
@@ -982,7 +982,7 @@ func (m *GetPermissionCodesByProductRequest) validate(all bool) error {
 
 	var errors []error
 
-	// no validation rules for ProductId
+	// no validation rules for ProductCode
 
 	if m.Status != nil {
 		// no validation rules for Status
