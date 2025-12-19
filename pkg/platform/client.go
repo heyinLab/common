@@ -246,12 +246,12 @@ func (c *IAMClient) GetTenantPermissionsTree(ctx context.Context, opts *GetTenan
 	// 执行请求
 	resp, err := c.client.GetTenantPermissionsTree(ctx, req)
 	if err != nil {
-		c.logger.WithContext(ctx).Errorf("获取租户权限树失败: status=%s, error=%v", 
+		c.logger.WithContext(ctx).Errorf("获取租户权限树失败: status=%s, error=%v",
 			getStringValue(req.Status), err)
 		return nil, 0, err
 	}
 
-	c.logger.WithContext(ctx).Infof("获取租户权限树成功: status=%s, total=%d", 
+	c.logger.WithContext(ctx).Infof("获取租户权限树成功: status=%s, total=%d",
 		getStringValue(req.Status), resp.Total)
 
 	return resp.Tree, resp.Total, nil
@@ -293,7 +293,7 @@ type GetPermissionCodesByProductOptions struct {
 //	codes, total, err := client.IAM().GetPermissionCodesByProduct(ctx, 1, &platform.GetPermissionCodesByProductOptions{
 //	    Status: "GA",
 //	})
-func (c *IAMClient) GetPermissionCodesByProduct(ctx context.Context, productID uint32, opts *GetPermissionCodesByProductOptions) ([]string, uint32, error) {
+func (c *IAMClient) GetPermissionCodesByProduct(ctx context.Context, productCode string, opts *GetPermissionCodesByProductOptions) ([]string, uint32, error) {
 	// 设置超时
 	if opts != nil && opts.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -303,7 +303,7 @@ func (c *IAMClient) GetPermissionCodesByProduct(ctx context.Context, productID u
 
 	// 构建请求
 	req := &v1.GetPermissionCodesByProductRequest{
-		ProductId: productID,
+		ProductCode: productCode,
 	}
 	if opts != nil && opts.Status != "" {
 		req.Status = &opts.Status
@@ -312,13 +312,13 @@ func (c *IAMClient) GetPermissionCodesByProduct(ctx context.Context, productID u
 	// 执行请求
 	resp, err := c.client.GetPermissionCodesByProduct(ctx, req)
 	if err != nil {
-		c.logger.WithContext(ctx).Errorf("获取产品权限codes失败: product_id=%d, status=%s, error=%v", 
-			productID, getStringValue(req.Status), err)
+		c.logger.WithContext(ctx).Errorf("获取产品权限codes失败: product_id=%d, status=%s, error=%v",
+			productCode, getStringValue(req.Status), err)
 		return nil, 0, err
 	}
 
-	c.logger.WithContext(ctx).Infof("获取产品权限codes成功: product_id=%d, status=%s, total=%d", 
-		productID, getStringValue(req.Status), resp.Total)
+	c.logger.WithContext(ctx).Infof("获取产品权限codes成功: product_id=%d, status=%s, total=%d",
+		productCode, getStringValue(req.Status), resp.Total)
 
 	return resp.Codes, resp.Total, nil
 }
